@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delroy</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <canvas id="dots-canvas"></canvas>
+
+  <div class="page">
+    <h1 class="title">Welcome</h1>
+    <div class="frame-wrap">
+      <canvas id="img-canvas"></canvas>
+    </div>
+    <div class="bio">
+      <p>Hey, I'm <strong>Delroy</strong> — 14 years old and proud of it. I spend most of my time watching anime and diving deep into the world of Pokémon. My two favourite Pokémon are <strong>Archaludon</strong> and <strong>Zygarde</strong> — yeah, I've got taste. My brain works a little differently than most people's, and honestly that just means I go harder on the things I love. Welcome to my corner of the internet.</p>
+    </div>
+  </div>
+
+  <script>
+    const IMAGE_PATHS = [
+      '.backgrounds/Delroy1.png',
+      '.backgrounds/Delroy2.png',
+      '.backgrounds/Delroy3.png',
+      '.backgrounds/Delroy4.png',
+      '.backgrounds/Delroy5.png',
+    ];
+    const ROTATE_MS = 15000;
+    const FADE_MS   = 1000;
+    const FRAME_PAD = 10;
+    const DOT_COUNT = 110;
+    const DOT_COLOR = 'rgba(255,255,255,1)';
+    const SPEED_MIN = 0.4;
+    const SPEED_MAX = 1.4;
+
+    const bgCanvas = document.getElementById('dots-canvas');
+    const bgCtx    = bgCanvas.getContext('2d');
+
+    function resizeBg() {
+      bgCanvas.width  = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeBg);
+    resizeBg();
+
+    function makeDot(fromBottom) {
+      return {
+        x:     Math.random() * bgCanvas.width,
+        y:     fromBottom ? bgCanvas.height + Math.random() * 40 : Math.random() * bgCanvas.height,
+        r:     0.5 + Math.random() * 1.2,
+        speed: SPEED_MIN + Math.random() * (SPEED_MAX - SPEED_MIN),
+        drift: (Math.random() - 0.5) * 0.35,
+      };
+    }
+    let dots = Array.from({ length: DOT_COUNT }, () => makeDot(false));
+
+    function animateDots() {
+      const W = bgCanvas.width, H = bgCanvas.height;
+      bgCtx.fillStyle = '#000';
+      bgCtx.fillRect(0, 0, W, H);
+      bgCtx.fillStyle = DOT_COLOR;
+      for (const d of dots) {
+        d.y -= d.speed;
+        d.x += d.drift;
+        if (d.y + d.r < 0)    Object.assign(d, makeDot(true));
+        if (d.x < -d.r)       d.x = W + d.r;
+        if (d.x > W + d.r)    d.x = -d.r;
+        bgCtx.beginPath();
+        bgCtx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        bgCtx.fill();
+      }
+      requestAnimationFrame(animateDots);
+    }
+    requestAnimationFrame(animateDots);
+
+    const imgCanvas = document.getElementById('img-canvas');
+    const imgCtx    = imgCanvas.getContext('2d');
+    const frameWrap = document.querySelector('.frame-wrap');
+
+    const imgs = IMAGE_PATHS.map(src => {
+      const img = new Image();
+      img.src = src;
+      return img;
+    });
+
+    let currentIdx = 0;
+    let nextIdx    = null;
+    let fadeStart  = null;
+
+    function sizeFrameToImage(img) {
+      if (!img || !img.naturalWidth) return;
+      const titleEl = document.querySelector('.title');
+      const bioEl   = document.querySelector('.bio');
+      const titleH  = titleEl ? titleEl.offsetHeight + 16 : 60;
+      const bioH    = bioEl   ? bioEl.offsetHeight   + 16 : 80;
+      const maxW    = window.innerWidth  - 48;
+      const maxH    = window.innerHeight - titleH - bioH - 48;
+      const scale   = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+      const dispW   = Math.round(img.naturalWidth  * scale);
+      const dispH   = Math.round(img.naturalHeight * scale);
+      imgCanvas.width        = dispW;
+      imgCanvas.height       = dispH;
+      imgCanvas.style.width  = dispW + 'px';
+      imgCanvas.style.height = dispH + 'px';
+      frameWrap.style.width  = (dispW + FRAME_PAD * 2) + 'px';
+      frameWrap.style.height = (dispH + FRAME_PAD * 2) + 'px';
+    }
+
+    function drawImages(now) {
+      const W = imgCanvas.width, H = imgCanvas.height;
+      imgCtx.clearRect(0, 0, W, H);
+      let curAlpha = 1, nxtAlpha = 0;
+      if (fadeStart !== null) {
+        const t = Math.min((now - fadeStart) / FADE_MS, 1);
+        curAlpha = 1 - t;
+        nxtAlpha = t;
+        if (t >= 1) {
+          currentIdx = nextIdx;
+          nextIdx = null; fadeStart = null;
+          curAlpha = 1; nxtAlpha = 0;
+          sizeFrameToImage(imgs[currentIdx]);
+        }
+      }
+      if (nextIdx !== null && imgs[nextIdx].complete) {
+        imgCtx.globalAlpha = nxtAlpha;
+        imgCtx.drawImage(imgs[nextIdx], 0, 0, W, H);
+      }
+      if (imgs[currentIdx].complete) {
+        imgCtx.globalAlpha = curAlpha;
+        imgCtx.drawImage(imgs[currentIdx], 0, 0, W, H);
+      }
+      imgCtx.globalAlpha = 1;
+      requestAnimationFrame(drawImages);
+    }
+
+    setInterval(() => {
+      nextIdx   = (currentIdx + 1) % imgs.length;
+      fadeStart = performance.now();
+    }, ROTATE_MS);
+
+    function init() {
+      const firstImg = imgs[0];
+      if (firstImg.complete && firstImg.naturalWidth) {
+        sizeFrameToImage(firstImg);
+        requestAnimationFrame(drawImages);
+      } else {
+        firstImg.onload = () => {
+          sizeFrameToImage(firstImg);
+          requestAnimationFrame(drawImages);
+        };
+      }
+    }
+
+    window.addEventListener('resize', () => sizeFrameToImage(imgs[currentIdx]));
+    window.addEventListener('load', init);
+    setTimeout(init, 100);
+  </script>
+</body>
+</html>
